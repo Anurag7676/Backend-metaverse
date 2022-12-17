@@ -1,48 +1,12 @@
 const {MongoClient}= require('mongodb');
 const {v1:uuidv4}= require('uuid');
 const URI= 'mongodb+srv://metaverse:Testing%40121003@cluster0.1bvoswa.mongodb.net/Cluster0?retryWrites=true&w=majority'
-const Register= require('../models/register');
 const jwt=require('jsonwebtoken')
 const bcrypt= require('bcrypt')
-const connectDb=require('../db/connect');
 const homepage=(req,res)=>{
-    res.send('babes its working')
+    res.send('HOMEPAGE RENDER')
 }
 
-
-const registered= async(req,res)=>
-{
-    
-    try {
-        const Password= req.body.password;
-        const cpassword= req.body.cpassword;    
-        
-        if(Password===cpassword)
-        {
-            const generateuserid= uuidv4()
-            const hashedpassword= await bcrypt.hash(Password,10);
-            
-            const registeruser= new Register(
-                {
-                    firstname:req.body.firstname,
-                    lastname:req.body.lastname,
-                    email:req.body.email,
-                    password:req.body.password,
-                    confirmpassword:req.body.cpassword
-                }
-            )
-            const saveregisterdata= await registeruser.save();
-            res.status(201);
-
-        }
-        
-        
-    } catch (error) {
-        
-    }
-
-
-}
 
 const login=async(req,res)=>{
     const client= new MongoClient(URI);
