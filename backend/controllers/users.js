@@ -1,124 +1,132 @@
-const {MongoClient}= require('mongodb');
 const {v1:uuidv4}= require('uuid');
-const URI= 'mongodb+srv://metaverse:Testing%40121003@cluster0.1bvoswa.mongodb.net/Cluster0?retryWrites=true&w=majority'
-const Register= require('../models/register');
+const Users_register= require('../models/register');
 const jwt=require('jsonwebtoken')
 const bcrypt= require('bcrypt')
-const connectDb=require('../db/connect');
+const { Mongoose, default: mongoose } = require('mongoose');
+const connectDb = require('../db/Users');
 const homepage=(req,res)=>{
     res.send('babes its working')
 }
 
-
 const registered= async(req,res)=>
 {
-    
-    try {
-        const Password= req.body.password;
-        const cpassword= req.body.cpassword;    
-        
-        if(Password===cpassword)
-        {
-            const generateuserid= uuidv4()
-            const hashedpassword= await bcrypt.hash(Password,10);
-            
-            const registeruser= new Register(
-                {
-                    firstname:req.body.firstname,
-                    lastname:req.body.lastname,
-                    email:req.body.email,
-                    password:req.body.password,
-                    confirmpassword:req.body.cpassword
-                }
-            )
-            const saveregisterdata= await registeruser.save();
-            res.status(201);
+    await connectDb(process.env.URI)
+   const {firstname,lastname,email,password,confirmpassword}=req.body;
+   if(password!==confirmpassword)
+   {
+    return res.status(422).json({err:"password not match"})  ;
+   }
 
-        }
-        
-        
-    } catch (error) {
-        
+   if(!firstname||!lastname||!email||!password||!confirmpassword)
+    {
+        return res.status(422).json({error:"please fill all the field properly"});
     }
+     
+    try {
+       const userExist=await Users_register.findOne({email:email})
+        
+         if(userExist){
+               return  res.status(422).json({error:"email already exist"});
+            }
+
+        const user= new Users_register({firstname,lastname,email,password,confirmpassword})
+        
+        const newuser= await user.save();            
+        res.status(201).json({msg:"user created succesfully"})
+           
+        }
+         catch (error) {
+            console.log(err);
+        }
 
 
 }
 
-const login=async(req,res)=>{
-    const client= new MongoClient(URI);
-    const email= req.body.email;
-    const Password= req.body.password;
-    
+const login= async(req,res)=>
+{
+     await connectDb(process.env.URI);
+    const {email,password}=req.body
+  
     try {
-        client.connect();
-        const database= client.db('app-data');
-        const users= database.collection('users');
-    
-        //find user by email
-        const user= await users.findOne({email})
-        const correct_pass= await bcrypt.compare(Password,user.hashedPassword);
-        if(user && correct_pass)
+        
+        if(email.length==0 ||password.length==0)
         {
-            const token= jwt.sign(user,email,
-                {
-                    expiresIn:60*24
-                })
-            res.status(201).json({token, userId: user.user_id,email})
+                return res.json({msg:"error please fill the fields properly"});
+    
         }
-        else{
-            res.status(400).send('invalid credentials');
+     const user=await Users_register.findOne({email:email});
+    if(user)
+    {
+        const ismatch= await bcrypt.compare(password,user.password)
+
+
+        if(!ismatch)
+        {
+
+            res.status(400).json({error:"Email or password doesn't match"})
         }
+        else
+        {
+           const token= await user.generatetoken(); 
+           res.cookie('jwt',token);
+           res.status(200).json({msg:'user logged in sucessfully'})
+        }
+    }
+    else
+    {
+        res.status(400).json({error:`Email or password doesn't match`});
+    }
+     
+    }
+     catch (error) {
+        console.log(error)
+        
+    }
+   
+}
+
+
+
+
+
+
+// const login=async(req,res)=>{
+// //     const client= new MongoClient(URI);
+// //     const email= req.body.email;
+// //     const Password= req.body.password;
+    
+// //     try {
+// //         client.connect();
+// //         const database= client.db('app-data');
+// //         const users= database.collection('users');
+    
+// //         //find user by email
+// //         const user= await users.findOne({email})
+// //         const correct_pass= await bcrypt.compare(Password,user.hashedPassword);
+// //         if(user && correct_pass)
+// //         {
+// //             const token= jwt.sign(user,email,
+// //                 {
+// //                     expiresIn:60*24
+// //                 })
+// //             res.status(201).json({token, userId: user.user_id,email})
+// //         }
+// //         else{
+// //             res.status(400).send('invalid credentials');
+// //         }
        
     
-    } catch (error) {
-        console.log(error);  
-    }
+// //     } catch (error) {
+// //         console.log(error);  
+// //     }
     
     
-    }
-const register=async (req,res)=>{
+//     }
 
-        const client= new MongoClient(URI);
-        const email= req.body.email;
-        const Password= req.body.password;
-        // console.log(email,Password);
-        
-        const generateuserid= uuidv4()
-        const hashedpassword= await bcrypt.hash(Password,10);
-        try {
-             client.connect();
-           const database=  client.db('app-data')
-           const users= database.collection('users');
-           const existinguser= await users.findOne({email})
-    
-           if(existinguser)
-           {
-            return res.status(409).send('user already exists, please login')
-           }
-    
-           const sanatizedEmail= email.toLowerCase();
-           const data={
-            user_id:generateuserid,
-            email: sanatizedEmail,
-            hashedPassword: hashedpassword
-           } 
-          const inserteduser=  await users.insertOne(data)
-           const token= await jwt.sign(inserteduser,sanatizedEmail,
-            {
-                expiresIn:60*24,
-            }
-            )
-            res.status(201).json({token, userId: generateuserid, email: sanatizedEmail})
-    
-        }
-        catch (error) {
-           console.log(error);
-    
-        }
-    
-    }   
 
-module.exports={homepage,register,login}
+
+
+module.exports={homepage,login,registered}
 
 
 
